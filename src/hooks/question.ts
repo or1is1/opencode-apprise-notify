@@ -1,8 +1,7 @@
 import type { Hooks } from "@opencode-ai/plugin";
 import type { DedupChecker } from "../dedup.js";
-import { formatNotification, DEFAULT_TRUNCATE_LENGTH } from "../formatter.js";
-import { sendNotification } from "../notifier.js";
 import type { PluginConfig } from "../types.js";
+import { createPayload, sendHookNotification } from "./shared.js";
 
 export interface QuestionHooks {
   before: NonNullable<Hooks["tool.execute.before"]>;
@@ -20,7 +19,6 @@ export function createQuestionHooks(
     { tool, callID },
     input,
   ) => {
-    // Case-insensitive check for "question" tool
     if (tool.toLowerCase() !== "question") return;
 
     const args = (input as { args?: { question?: unknown; options?: unknown } } | undefined)?.args;
@@ -29,33 +27,16 @@ export function createQuestionHooks(
       ? args.options.filter((option): option is string => typeof option === "string")
       : undefined;
 
-    // Schedule notification after 30 seconds (allow quick user response)
     const timer = setTimeout(async () => {
       if (!question) return;
 
-      const payload = {
-        type: "question" as const,
-        title: "❓ OpenCode Question",
-        context: {
-          userRequest: undefined,
-          agentResponse: undefined,
-          question,
-          options,
-          todoStatus: undefined,
-          taskName: undefined,
-          toolName: "Question",
-          action: undefined,
-        },
-      };
+      const payload = createPayload("question", "❓ OpenCode Question", {
+        question,
+        options,
+        toolName: "Question",
+      });
 
-      if (dedup.isDuplicate(payload)) return;
-
-      try {
-        const formatted = formatNotification(payload, DEFAULT_TRUNCATE_LENGTH);
-        await sendNotification(config, formatted);
-      } catch (err: unknown) {
-        console.warn("[opencode-apprise-notify] question hook error:", err);
-      }
+      await sendHookNotification("question", config, dedup, payload);
     }, delayMs);
 
     timers.set(callID, timer);

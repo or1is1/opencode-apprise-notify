@@ -1,5 +1,7 @@
 import type { FormattedNotification, PluginConfig } from "./types.js";
 
+const APPRISE_TIMEOUT_MS = 30_000;
+
 export interface NotifierResult {
   success: boolean;
   exitCode: number;
@@ -17,7 +19,7 @@ function getErrorMessage(error: unknown): string {
 export async function checkAppriseInstalled(): Promise<boolean> {
   try {
     const proc = Bun.spawn(["apprise", "--version"], {
-      timeout: 30_000,
+      timeout: APPRISE_TIMEOUT_MS,
       stderr: "pipe",
     });
 
@@ -48,7 +50,7 @@ export async function sendNotification(
 
   try {
     const proc = Bun.spawn(args, {
-      timeout: 30_000,
+      timeout: APPRISE_TIMEOUT_MS,
       stderr: "pipe",
     });
 

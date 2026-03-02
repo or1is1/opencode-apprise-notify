@@ -1,9 +1,8 @@
 import type { Hooks } from "@opencode-ai/plugin";
 import type { Permission } from "@opencode-ai/sdk";
 import type { DedupChecker } from "../dedup.js";
-import { formatNotification, DEFAULT_TRUNCATE_LENGTH } from "../formatter.js";
-import { sendNotification } from "../notifier.js";
 import type { PluginConfig } from "../types.js";
+import { createPayload, sendHookNotification } from "./shared.js";
 
 export interface PermissionHooks {
   /** Primary: permission.ask hook */
@@ -16,7 +15,6 @@ export function createPermissionHooks(
   config: PluginConfig,
   dedup: DedupChecker
 ): PermissionHooks {
-  // Track which permissions we've already notified about (to avoid double-notify)
   const notifiedPermissions = new Set<string>();
 
   async function notifyPermission(permission: Permission): Promise<void> {
@@ -27,29 +25,12 @@ export function createPermissionHooks(
     const toolName = (permission as unknown as { toolName?: string }).toolName ?? "Unknown Tool";
     const action = (permission as unknown as { action?: string }).action ?? "Unknown Action";
 
-    const payload = {
-      type: "permission" as const,
-      title: "🔐 OpenCode Permission Required",
-      context: {
-        userRequest: undefined,
-        agentResponse: undefined,
-        question: undefined,
-        options: undefined,
-        todoStatus: undefined,
-        taskName: undefined,
-        toolName,
-        action,
-      },
-    };
+    const payload = createPayload("permission", "🔐 OpenCode Permission Required", {
+      toolName,
+      action,
+    });
 
-    if (dedup.isDuplicate(payload)) return;
-
-    try {
-      const formatted = formatNotification(payload, DEFAULT_TRUNCATE_LENGTH);
-      await sendNotification(config, formatted);
-    } catch (err: unknown) {
-      console.warn("[opencode-apprise-notify] permission hook error:", err);
-    }
+    await sendHookNotification("permission", config, dedup, payload);
   }
 
   const permissionAsk: NonNullable<Hooks["permission.ask"]> = async (input, _output) => {

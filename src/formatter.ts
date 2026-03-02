@@ -1,10 +1,11 @@
 import type {
   AppriseNotificationType,
   FormattedNotification,
+  HookEventType,
   NotificationPayload,
 } from "./types.js";
 
-const TYPE_MAP: Record<string, AppriseNotificationType> = {
+const TYPE_MAP: Record<HookEventType, AppriseNotificationType> = {
   idle: "info",
   question: "warning",
   background: "success",
@@ -12,24 +13,26 @@ const TYPE_MAP: Record<string, AppriseNotificationType> = {
 };
 
 export const DEFAULT_TRUNCATE_LENGTH = 1500;
+const TRUNCATE_LINE_THRESHOLD = 10;
+const TRUNCATE_HEAD_LINES = 5;
+const TRUNCATE_TAIL_LINES = 5;
+const TRUNCATE_MARKER = "\n...(truncated)";
 
 export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
 
   const lines = text.split("\n");
-  if (lines.length <= 10) {
-    // Not enough lines for front/back split, fall back to char truncation
-    const keepLength = maxLength - 20;
-    return text.slice(0, keepLength) + "\n...(truncated)";
+  if (lines.length <= TRUNCATE_LINE_THRESHOLD) {
+    const keepLength = maxLength - TRUNCATE_MARKER.length;
+    return text.slice(0, keepLength) + TRUNCATE_MARKER;
   }
 
-  const head = lines.slice(0, 5).join("\n");
-  const tail = lines.slice(-5).join("\n");
-  const result = head + "\n...(truncated)\n" + tail;
+  const head = lines.slice(0, TRUNCATE_HEAD_LINES).join("\n");
+  const tail = lines.slice(-TRUNCATE_TAIL_LINES).join("\n");
+  const result = head + TRUNCATE_MARKER + "\n" + tail;
 
-  // Safety net: if still too long, fall back to char truncation
   if (result.length > maxLength) {
-    return text.slice(0, maxLength - 20) + "\n...(truncated)";
+    return text.slice(0, maxLength - TRUNCATE_MARKER.length) + TRUNCATE_MARKER;
   }
 
   return result;

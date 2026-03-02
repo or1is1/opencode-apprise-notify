@@ -1,10 +1,8 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin";
 import type { DedupChecker } from "../dedup.js";
-import { formatNotification, formatTodoStatus, DEFAULT_TRUNCATE_LENGTH } from "../formatter.js";
-import { sendNotification } from "../notifier.js";
+import { formatTodoStatus } from "../formatter.js";
 import type { PluginConfig } from "../types.js";
-
-export const DEFAULT_IDLE_DELAY_MS = 3000;
+import { createPayload, sendHookNotification } from "./shared.js";
 
 interface SessionMessage {
   role?: string;
@@ -29,13 +27,11 @@ export function createIdleHook(
   dedup: DedupChecker,
 ): NonNullable<Hooks["event"]> {
   return async ({ event }) => {
-    // Listen for session.idle events
     if (event.type !== "session.idle") return;
 
     const props = event.properties as { sessionID: string };
     if (!props.sessionID) return;
 
-    // Extract rich context from session
     let userRequest: string | undefined = undefined;
     let agentResponse: string | undefined = undefined;
     let todoStatus: string | undefined = undefined;
@@ -44,10 +40,8 @@ export function createIdleHook(
       const messagesResponse = await ctx.client.session.messages({
         path: { id: props.sessionID },
       });
-      // SDK wraps response in { data, error } — extract the array
       const messages = (messagesResponse.data ?? []) as unknown as SessionMessage[];
 
-      // Get last user message
       for (let i = messages.length - 1; i >= 0; i--) {
         const msg = messages[i];
         if (msg?.role === "user") {
@@ -56,7 +50,6 @@ export function createIdleHook(
         }
       }
 
-      // Get last agent message before user's last message
       if (userRequest) {
         for (let i = messages.length - 1; i >= 0; i--) {
           const msg = messages[i];
@@ -67,7 +60,6 @@ export function createIdleHook(
         }
       }
 
-      // Get todo status
       try {
         const todosResponse = await ctx.client.session.todo({
           path: { id: props.sessionID },
@@ -82,29 +74,12 @@ export function createIdleHook(
       console.warn("[opencode-apprise-notify] failed to fetch session data:", err);
     }
 
-    // Build notification payload
-    const payload = {
-      type: "idle" as const,
-      title: "📢 OpenCode Attention Required",
-      context: {
-        userRequest,
-        agentResponse,
-        question: undefined,
-        options: undefined,
-        todoStatus,
-        taskName: undefined,
-        toolName: undefined,
-        action: undefined,
-      },
-    };
+    const payload = createPayload("idle", "📢 OpenCode Attention Required", {
+      userRequest,
+      agentResponse,
+      todoStatus,
+    });
 
-    if (dedup.isDuplicate(payload)) return;
-
-    try {
-      const formatted = formatNotification(payload, DEFAULT_TRUNCATE_LENGTH);
-      await sendNotification(config, formatted);
-    } catch (err: unknown) {
-      console.warn("[opencode-apprise-notify] idle hook error:", err);
-    }
+    await sendHookNotification("idle", config, dedup, payload);
   };
 }
