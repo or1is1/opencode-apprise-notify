@@ -30,6 +30,15 @@ function makeDedup(isDuplicateResult: boolean = false): DedupChecker {
   };
 }
 
+function makeIdleEvent(sessionID: string): { event: OpencodeEvent } {
+  return {
+    event: {
+      type: "session.status",
+      properties: { sessionID, status: { type: "idle" } },
+    } as OpencodeEvent,
+  };
+}
+
 describe("createIdleHook", () => {
   const sendSpy = spyOn(notifier, "sendNotification").mockResolvedValue({
     success: true,
@@ -45,7 +54,23 @@ describe("createIdleHook", () => {
     sendSpy.mockClear();
   });
 
-  it("fetches session data on session.idle", async () => {
+  it("fetches session data on session.status with idle status", async () => {
+    const client: MockClient = {
+      session: {
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup());
+
+    await hook(makeIdleEvent("s-1"));
+
+    expect(client.session.messages).toHaveBeenCalledWith({ path: { id: "s-1" } });
+    expect(client.session.todo).toHaveBeenCalledWith({ path: { id: "s-1" } });
+  });
+
+  it("ignores session.status with non-idle status", async () => {
     const client: MockClient = {
       session: {
         messages: mock(() => Promise.resolve({ data: [] })),
@@ -56,14 +81,38 @@ describe("createIdleHook", () => {
     const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup());
 
     await hook({
-      event: { type: "session.idle", properties: { sessionID: "s-1" } } as OpencodeEvent,
+      event: {
+        type: "session.status",
+        properties: { sessionID: "s-1", status: { type: "busy" } },
+      } as OpencodeEvent,
     });
 
-    expect(client.session.messages).toHaveBeenCalledWith({ path: { id: "s-1" } });
-    expect(client.session.todo).toHaveBeenCalledWith({ path: { id: "s-1" } });
+    expect(client.session.messages).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it("sends idle notification immediately", async () => {
+  it("ignores non-session.status events", async () => {
+    const client: MockClient = {
+      session: {
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup());
+
+    await hook({
+      event: {
+        type: "message.updated",
+        properties: { info: { sessionID: "s-1" } },
+      } as OpencodeEvent,
+    });
+
+    expect(client.session.messages).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("sends idle notification with rich context", async () => {
     let dedupPayload: NotificationPayload | undefined;
     const dedup: DedupChecker = {
       isDuplicate: mock((payload: NotificationPayload) => {
@@ -97,9 +146,7 @@ describe("createIdleHook", () => {
 
     const hook = createIdleHook(makeInput(client), makeConfig(), dedup);
 
-    await hook({
-      event: { type: "session.idle", properties: { sessionID: "s-2" } } as OpencodeEvent,
-    });
+    await hook(makeIdleEvent("s-2"));
 
     expect(dedupPayload?.type).toBe("idle");
     expect(dedupPayload?.context.userRequest).toBe("Need an update");
@@ -118,9 +165,7 @@ describe("createIdleHook", () => {
 
     const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(true));
 
-    await hook({
-      event: { type: "session.idle", properties: { sessionID: "s-4" } } as OpencodeEvent,
-    });
+    await hook(makeIdleEvent("s-4"));
 
     expect(sendSpy).not.toHaveBeenCalled();
   });
@@ -136,9 +181,7 @@ describe("createIdleHook", () => {
 
     const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup());
 
-    await hook({
-      event: { type: "session.idle", properties: { sessionID: "s-5" } } as OpencodeEvent,
-    });
+    await hook(makeIdleEvent("s-5"));
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalled();

@@ -27,9 +27,10 @@ export function createIdleHook(
   dedup: DedupChecker,
 ): NonNullable<Hooks["event"]> {
   return async ({ event }) => {
-    if (event.type !== "session.idle") return;
+    if (event.type !== "session.status") return;
 
-    const props = event.properties as { sessionID: string };
+    const props = event.properties as { sessionID: string; status: { type: string } };
+    if (props.status.type !== "idle") return;
     if (!props.sessionID) return;
 
     let userRequest: string | undefined = undefined;

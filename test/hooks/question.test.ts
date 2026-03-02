@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import type { Event as OpencodeEvent } from "@opencode-ai/sdk";
 import type { DedupChecker } from "../../src/dedup.js";
 import * as notifier from "../../src/notifier.js";
 import type { NotificationPayload, PluginConfig } from "../../src/types.js";
-import { createQuestionHooks } from "../../src/hooks/question.js";
+import { createQuestionHook } from "../../src/hooks/question.js";
 
 function makeConfig(): PluginConfig {
   return {
@@ -17,7 +18,42 @@ function makeDedup(isDuplicateResult: boolean = false): DedupChecker {
   };
 }
 
-describe("createQuestionHooks", () => {
+function makeQuestionAskedEvent(
+  id: string,
+  question: string,
+  options: Array<{ label: string; description: string }> = [],
+): { event: OpencodeEvent } {
+  return {
+    event: {
+      type: "question.asked",
+      properties: {
+        id,
+        sessionID: "s-1",
+        questions: [{ question, header: "Choose", options }],
+      },
+    } as OpencodeEvent,
+  };
+}
+
+function makeQuestionRepliedEvent(requestID: string): { event: OpencodeEvent } {
+  return {
+    event: {
+      type: "question.replied",
+      properties: { sessionID: "s-1", requestID, answers: [["yes"]] },
+    } as OpencodeEvent,
+  };
+}
+
+function makeQuestionRejectedEvent(requestID: string): { event: OpencodeEvent } {
+  return {
+    event: {
+      type: "question.rejected",
+      properties: { sessionID: "s-1", requestID },
+    } as OpencodeEvent,
+  };
+}
+
+describe("createQuestionHook", () => {
   const sendSpy = spyOn(notifier, "sendNotification").mockResolvedValue({
     success: true,
     exitCode: 0,
@@ -32,29 +68,30 @@ describe("createQuestionHooks", () => {
     sendSpy.mockClear();
   });
 
-  it("non-question tool → before hook does nothing", async () => {
+  it("ignores non-question events", async () => {
     const dedup = makeDedup();
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
 
-    await before(
-      { tool: "bash", sessionID: "s-1", callID: "c-1" },
-      { args: { command: "ls" } }
-    );
+    await hook({
+      event: {
+        type: "message.updated",
+        properties: { info: { sessionID: "s-1" } },
+      } as OpencodeEvent,
+    });
 
-    // No timer set, no notification
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(sendSpy).not.toHaveBeenCalled();
     expect(dedup.isDuplicate).not.toHaveBeenCalled();
   });
 
-  it("\"Question\" tool (exact case) → timer is set and fires", async () => {
+  it("sends notification on question.asked after delay", async () => {
     const dedup = makeDedup();
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
 
-    await before(
-      { tool: "Question", sessionID: "s-2", callID: "c-2" },
-      { args: { question: "Continue?", options: ["yes", "no"] } }
-    );
+    await hook(makeQuestionAskedEvent("q-1", "Continue?", [
+      { label: "yes", description: "Proceed" },
+      { label: "no", description: "Stop" },
+    ]));
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(sendSpy).toHaveBeenCalledTimes(1);
@@ -64,33 +101,7 @@ describe("createQuestionHooks", () => {
     expect(call[1].body).toContain("Continue?");
   });
 
-  it("\"question\" (lowercase) → timer is set (case-insensitive)", async () => {
-    const dedup = makeDedup();
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
-
-    await before(
-      { tool: "question", sessionID: "s-3", callID: "c-3" },
-      { args: { question: "Pick a color" } }
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("\"QUESTION\" (uppercase) → timer is set (case-insensitive)", async () => {
-    const dedup = makeDedup();
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
-
-    await before(
-      { tool: "QUESTION", sessionID: "s-4", callID: "c-4" },
-      { args: { question: "Are you sure?" } }
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("sends notification with type 'question' and question text after delay", async () => {
+  it("extracts question text and option labels into payload", async () => {
     let capturedPayload: NotificationPayload | undefined;
     const dedup: DedupChecker = {
       isDuplicate: mock((payload: NotificationPayload) => {
@@ -100,12 +111,13 @@ describe("createQuestionHooks", () => {
       clear: mock(() => {}),
     };
 
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
 
-    await before(
-      { tool: "question", sessionID: "s-5", callID: "c-5" },
-      { args: { question: "Deploy to prod?", options: ["yes", "no", "cancel"] } }
-    );
+    await hook(makeQuestionAskedEvent("q-2", "Deploy to prod?", [
+      { label: "yes", description: "Ship it" },
+      { label: "no", description: "Abort" },
+      { label: "cancel", description: "Cancel deploy" },
+    ]));
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -114,7 +126,6 @@ describe("createQuestionHooks", () => {
     expect(capturedPayload!.title).toBe("❓ OpenCode Question");
     expect(capturedPayload!.context.question).toBe("Deploy to prod?");
     expect(capturedPayload!.context.options).toEqual(["yes", "no", "cancel"]);
-    expect(capturedPayload!.context.toolName).toBe("Question");
 
     expect(sendSpy).toHaveBeenCalledTimes(1);
     const call = sendSpy.mock.calls[0]!;
@@ -122,58 +133,57 @@ describe("createQuestionHooks", () => {
     expect(call[1].notificationType).toBe("warning");
   });
 
-  it("after hook cancels pending timer \u2192 sendNotification NOT called", async () => {
+  it("question.replied cancels pending timer", async () => {
     const clearTimeoutSpy = spyOn(globalThis, "clearTimeout");
     const dedup = makeDedup();
-    // Use a very long delay that will never fire during the test
-    const { before, after } = createQuestionHooks(makeConfig(), dedup, 60_000);
+    const hook = createQuestionHook(makeConfig(), dedup, 60_000);
 
-    await before(
-      { tool: "question", sessionID: "s-6", callID: "c-6" },
-      { args: { question: "Continue?" } }
-    );
+    await hook(makeQuestionAskedEvent("q-3", "Continue?"));
+    await hook(makeQuestionRepliedEvent("q-3"));
 
-    // Cancel immediately via after hook
-    await after(
-      { tool: "question", sessionID: "s-6", callID: "c-6", args: { question: "Continue?" } },
-      { title: "Question", output: "yes", metadata: {} }
-    );
-
-    // Verify clearTimeout was called (timer was cancelled)
     expect(clearTimeoutSpy).toHaveBeenCalled();
-    // sendNotification should NOT have been called (timer was cancelled before firing)
     expect(sendSpy).not.toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
   });
 
-  it("after hook ignores non-question tools", async () => {
+  it("question.rejected cancels pending timer", async () => {
+    const clearTimeoutSpy = spyOn(globalThis, "clearTimeout");
     const dedup = makeDedup();
-    const { before, after } = createQuestionHooks(makeConfig(), dedup, 0);
+    const hook = createQuestionHook(makeConfig(), dedup, 60_000);
 
-    await before(
-      { tool: "question", sessionID: "s-7", callID: "c-7" },
-      { args: { question: "Test?" } }
-    );
+    await hook(makeQuestionAskedEvent("q-4", "Pick a color?"));
+    await hook(makeQuestionRejectedEvent("q-4"));
 
-    // After hook for different tool should NOT cancel the question timer
-    await after(
-      { tool: "bash", sessionID: "s-7", callID: "c-other", args: {} },
-      { title: "Bash", output: "done", metadata: {} }
-    );
-
-    // The question timer should still fire (delayMs=0)
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(sendSpy).toHaveBeenCalled();
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
   });
 
-  it("dedup blocks duplicate question → sendNotification NOT called", async () => {
-    const dedup = makeDedup(true); // always returns true = duplicate
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
+  it("question with no options sends notification without options", async () => {
+    let capturedPayload: NotificationPayload | undefined;
+    const dedup: DedupChecker = {
+      isDuplicate: mock((payload: NotificationPayload) => {
+        capturedPayload = payload;
+        return false;
+      }),
+      clear: mock(() => {}),
+    };
 
-    await before(
-      { tool: "question", sessionID: "s-8", callID: "c-8" },
-      { args: { question: "Same question again" } }
-    );
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
+
+    await hook(makeQuestionAskedEvent("q-5", "What should I do?"));
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(capturedPayload).toBeDefined();
+    expect(capturedPayload!.context.options).toBeUndefined();
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("dedup blocks duplicate question", async () => {
+    const dedup = makeDedup(true);
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
+
+    await hook(makeQuestionAskedEvent("q-6", "Same question again"));
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(sendSpy).not.toHaveBeenCalled();
@@ -184,16 +194,35 @@ describe("createQuestionHooks", () => {
     sendSpy.mockRejectedValueOnce(new Error("network failure"));
 
     const dedup = makeDedup();
-    const { before } = createQuestionHooks(makeConfig(), dedup, 0);
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
 
-    await before(
-      { tool: "question", sessionID: "s-9", callID: "c-9" },
-      { args: { question: "Will this error?" } }
-    );
+    await hook(makeQuestionAskedEvent("q-7", "Will this error?"));
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it("ignores question.asked with empty questions array", async () => {
+    const dedup = makeDedup();
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
+
+    await hook({
+      event: {
+        type: "question.asked",
+        properties: { id: "q-8", sessionID: "s-1", questions: [] },
+      } as OpencodeEvent,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("reply for unknown requestID does not throw", async () => {
+    const dedup = makeDedup();
+    const hook = createQuestionHook(makeConfig(), dedup, 0);
+
+    await expect(hook(makeQuestionRepliedEvent("unknown-id"))).resolves.toBeUndefined();
   });
 });

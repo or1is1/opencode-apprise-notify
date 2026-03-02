@@ -3,57 +3,62 @@ import type { DedupChecker } from "../dedup.js";
 import type { PluginConfig } from "../types.js";
 import { createPayload, sendHookNotification } from "./shared.js";
 
-export interface QuestionHooks {
-  before: NonNullable<Hooks["tool.execute.before"]>;
-  after: NonNullable<Hooks["tool.execute.after"]>;
+interface QuestionAskedProperties {
+  id: string;
+  sessionID: string;
+  questions: Array<{
+    question: string;
+    header: string;
+    options: Array<{ label: string; description: string }>;
+  }>;
 }
 
-export function createQuestionHooks(
+interface QuestionReplyProperties {
+  requestID: string;
+}
+
+export function createQuestionHook(
   config: PluginConfig,
   dedup: DedupChecker,
   delayMs: number = 30_000,
-): QuestionHooks {
+): NonNullable<Hooks["event"]> {
   const timers = new Map<string, NodeJS.Timeout>();
 
-  const before: NonNullable<Hooks["tool.execute.before"]> = async (
-    { tool, callID },
-    input,
-  ) => {
-    if (tool.toLowerCase() !== "question") return;
+  return async ({ event }) => {
+    // SDK v1 Event union is incomplete — v2 event types exist at runtime
+    const eventType: string = event.type;
 
-    const args = (input as { args?: { question?: unknown; options?: unknown } } | undefined)?.args;
-    const question = typeof args?.question === "string" ? args.question : undefined;
-    const options = Array.isArray(args?.options)
-      ? args.options.filter((option): option is string => typeof option === "string")
-      : undefined;
+    if (eventType === "question.replied" || eventType === "question.rejected") {
+      const props = (event as unknown as { properties: QuestionReplyProperties }).properties;
+      const timer = timers.get(props.requestID);
+      if (timer) {
+        clearTimeout(timer);
+        timers.delete(props.requestID);
+      }
+      return;
+    }
+
+    if (eventType !== "question.asked") return;
+
+    const props = (event as unknown as { properties: QuestionAskedProperties }).properties;
+    const firstQuestion = props.questions[0];
+    if (!firstQuestion) return;
+
+    const question = firstQuestion.question;
+    const options = firstQuestion.options.map((opt) => opt.label);
+    const requestId = props.id;
 
     const timer = setTimeout(async () => {
-      if (!question) return;
+      timers.delete(requestId);
 
       const payload = createPayload("question", "❓ OpenCode Question", {
         question,
-        options,
-        toolName: "Question",
+        options: options.length > 0 ? options : undefined,
       });
 
       await sendHookNotification("question", config, dedup, payload);
     }, delayMs);
 
-    timers.set(callID, timer);
+    timers.set(requestId, timer);
   };
-
-  const after: NonNullable<Hooks["tool.execute.after"]> = async ({
-    tool,
-    callID,
-  }) => {
-    if (tool.toLowerCase() !== "question") return;
-
-    const timer = timers.get(callID);
-    if (timer) {
-      clearTimeout(timer);
-      timers.delete(callID);
-    }
-  };
-
-  return { before, after };
 }

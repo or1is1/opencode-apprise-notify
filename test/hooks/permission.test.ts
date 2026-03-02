@@ -47,14 +47,14 @@ describe("createPermissionHooks", () => {
   });
 
   describe("permissionAsk", () => {
-    it("sends notification on permission.ask", async () => {
+    it("sends notification using v1 Permission fields (title, pattern)", async () => {
       const dedup = makeDedup(false);
       const hooks = createPermissionHooks(makeConfig(), dedup);
 
       const permission = makePermission({
         id: "perm-ask-1",
-        toolName: "bash",
-        action: "execute rm -rf",
+        title: "Execute bash command",
+        pattern: ["rm -rf /tmp/*"],
       } as Record<string, unknown>);
 
       await hooks.permissionAsk(permission, { status: "ask" });
@@ -65,8 +65,37 @@ describe("createPermissionHooks", () => {
       expect(dedup.isDuplicate).toHaveBeenCalled();
       const payload = (dedup.isDuplicate as ReturnType<typeof mock>).mock.calls[0]![0] as NotificationPayload;
       expect(payload.type).toBe("permission");
-      expect(payload.context.toolName).toBe("bash");
-      expect(payload.context.action).toBe("execute rm -rf");
+      expect(payload.context.toolName).toBe("Execute bash command");
+      expect(payload.context.action).toBe("rm -rf /tmp/*");
+    });
+
+    it("handles string pattern (non-array)", async () => {
+      const dedup = makeDedup(false);
+      const hooks = createPermissionHooks(makeConfig(), dedup);
+
+      const permission = makePermission({
+        id: "perm-str-1",
+        title: "Write file",
+        pattern: "/etc/hosts",
+      } as Record<string, unknown>);
+
+      await hooks.permissionAsk(permission, { status: "ask" });
+
+      const payload = (dedup.isDuplicate as ReturnType<typeof mock>).mock.calls[0]![0] as NotificationPayload;
+      expect(payload.context.action).toBe("/etc/hosts");
+    });
+
+    it("falls back to 'Unknown' when title/pattern are missing", async () => {
+      const dedup = makeDedup(false);
+      const hooks = createPermissionHooks(makeConfig(), dedup);
+
+      const permission = makePermission({ id: "perm-fallback-1" });
+
+      await hooks.permissionAsk(permission, { status: "ask" });
+
+      const payload = (dedup.isDuplicate as ReturnType<typeof mock>).mock.calls[0]![0] as NotificationPayload;
+      expect(payload.context.toolName).toBe("Run command");
+      expect(payload.context.action).toBe("Unknown");
     });
 
     it("does not send notification when dedup blocks", async () => {
@@ -82,29 +111,33 @@ describe("createPermissionHooks", () => {
   });
 
   describe("eventFallback", () => {
-    it("sends notification on permission.updated event", async () => {
+    it("sends notification on permission.asked event with v2 fields", async () => {
       const dedup = makeDedup(false);
       const hooks = createPermissionHooks(makeConfig(), dedup);
 
-      const permission = makePermission({
-        id: "perm-event-1",
-        toolName: "file_write",
-        action: "write to /etc/hosts",
-      } as Record<string, unknown>);
-
       await hooks.eventFallback({
         event: {
-          type: "permission.updated",
-          properties: permission,
+          type: "permission.asked",
+          properties: {
+            id: "perm-event-1",
+            sessionID: "s-1",
+            permission: "bash",
+            patterns: ["rm -rf /tmp/*"],
+            metadata: {},
+            always: [],
+          },
         } as OpencodeEvent,
       });
 
       expect(sendSpy).toHaveBeenCalledTimes(1);
       const call = sendSpy.mock.calls[0]!;
       expect(call[1].title).toBe("🔐 OpenCode Permission Required");
+      const payload = (dedup.isDuplicate as ReturnType<typeof mock>).mock.calls[0]![0] as NotificationPayload;
+      expect(payload.context.toolName).toBe("bash");
+      expect(payload.context.action).toBe("rm -rf /tmp/*");
     });
 
-    it("ignores non-permission.updated events", async () => {
+    it("ignores non-permission.asked events", async () => {
       const dedup = makeDedup(false);
       const hooks = createPermissionHooks(makeConfig(), dedup);
 
@@ -126,23 +159,27 @@ describe("createPermissionHooks", () => {
 
       const permission = makePermission({
         id: "perm-shared-1",
-        toolName: "bash",
-        action: "run tests",
+        title: "Run tests",
+        pattern: ["bun test"],
       } as Record<string, unknown>);
 
-      // First: permission.ask fires
       await hooks.permissionAsk(permission, { status: "ask" });
       expect(sendSpy).toHaveBeenCalledTimes(1);
 
-      // Second: permission.updated also fires for same permission
       await hooks.eventFallback({
         event: {
-          type: "permission.updated",
-          properties: permission,
+          type: "permission.asked",
+          properties: {
+            id: "perm-shared-1",
+            sessionID: "s-1",
+            permission: "bash",
+            patterns: ["bun test"],
+            metadata: {},
+            always: [],
+          },
         } as OpencodeEvent,
       });
 
-      // Should still be 1 — the Set prevented double-notify
       expect(sendSpy).toHaveBeenCalledTimes(1);
     });
   });

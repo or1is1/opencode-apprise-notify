@@ -50,15 +50,15 @@ describe("Integration + Edge Cases", () => {
     mock.restore();
   });
 
-  it("full plugin initialization flow returns all expected hooks", async () => {
+  it("full plugin initialization flow returns expected hooks", async () => {
     spyOn(notifier, "checkAppriseInstalled").mockResolvedValue(true);
 
     const hooks = await plugin(makePluginInput());
 
     expect(typeof hooks.event).toBe("function");
-    expect(typeof hooks["tool.execute.before"]).toBe("function");
-    expect(typeof hooks["tool.execute.after"]).toBe("function");
     expect(typeof hooks["permission.ask"]).toBe("function");
+    expect("tool.execute.before" in hooks).toBe(false);
+    expect("tool.execute.after" in hooks).toBe(false);
   });
 
   it("plugin gracefully disables when apprise is not installed", async () => {

@@ -1,10 +1,9 @@
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { loadConfig, validateConfig } from "./config.js";
 import { createDedupChecker } from "./dedup.js";
-import { createBackgroundHook } from "./hooks/background.js";
 import { createIdleHook } from "./hooks/idle.js";
 import { createPermissionHooks } from "./hooks/permission.js";
-import { createQuestionHooks } from "./hooks/question.js";
+import { createQuestionHook } from "./hooks/question.js";
 import { checkAppriseInstalled } from "./notifier.js";
 import type { PluginConfig } from "./types.js";
 
@@ -32,20 +31,17 @@ const plugin: Plugin = async (input) => {
   const dedup = createDedupChecker();
 
   const idleHook = createIdleHook(input, config, dedup);
-  const questionHooks = createQuestionHooks(config, dedup);
-  const backgroundHook = createBackgroundHook(config, dedup);
+  const questionHook = createQuestionHook(config, dedup);
   const permissionHooks = createPermissionHooks(config, dedup);
 
   const combinedEventHook: NonNullable<Hooks["event"]> = async ({ event }) => {
-    await idleHook({ event });
-    await backgroundHook({ event });
+    await questionHook({ event });
     await permissionHooks.eventFallback({ event });
+    await idleHook({ event });
   };
 
   return {
     event: combinedEventHook,
-    "tool.execute.before": questionHooks.before,
-    "tool.execute.after": questionHooks.after,
     "permission.ask": permissionHooks.permissionAsk,
   };
 };

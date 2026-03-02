@@ -60,14 +60,12 @@ describe("Plugin Entrypoint", () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  it("returns all expected hooks when config is valid and apprise is installed", async () => {
+  it("returns event and permission.ask hooks when config is valid", async () => {
     spyOn(notifier, "checkAppriseInstalled").mockResolvedValue(true);
 
     const hooks = await plugin(makePluginInput());
 
     expect(typeof hooks.event).toBe("function");
-    expect(typeof hooks["tool.execute.before"]).toBe("function");
-    expect(typeof hooks["tool.execute.after"]).toBe("function");
     expect(typeof hooks["permission.ask"]).toBe("function");
   });
 
@@ -77,8 +75,15 @@ describe("Plugin Entrypoint", () => {
     const hooks = await plugin(makePluginInput());
 
     expect("event" in hooks).toBe(true);
-    expect("tool.execute.before" in hooks).toBe(true);
-    expect("tool.execute.after" in hooks).toBe(true);
     expect("permission.ask" in hooks).toBe(true);
+  });
+
+  it("does not include tool.execute hooks (question is now event-based)", async () => {
+    spyOn(notifier, "checkAppriseInstalled").mockResolvedValue(true);
+
+    const hooks = await plugin(makePluginInput());
+
+    expect("tool.execute.before" in hooks).toBe(false);
+    expect("tool.execute.after" in hooks).toBe(false);
   });
 });
