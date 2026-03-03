@@ -39,7 +39,7 @@ export function createPermissionHooks(
       }
     }
 
-    const payload = createPayload("permission", "🔐 OpenCode Permission Required", {
+    const payload = createPayload("permission", "OpenCode Permission Required", {
       sessionTitle,
       toolName: title,
       action,
@@ -71,7 +71,7 @@ export function createPermissionHooks(
       }
     }
 
-    const payload = createPayload("permission", "🔐 OpenCode Permission Required", {
+    const payload = createPayload("permission", "OpenCode Permission Required", {
       sessionTitle,
       toolName: props.permission ?? "Unknown",
       action: props.patterns?.join(", ") ?? "Unknown",

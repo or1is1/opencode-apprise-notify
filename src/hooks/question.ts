@@ -63,7 +63,7 @@ export function createQuestionHook(
         // Session title is optional — continue without it
       }
 
-      const payload = createPayload("question", "❓ OpenCode Question", {
+      const payload = createPayload("question", "OpenCode Question", {
         sessionTitle,
         question,
         options: options.length > 0 ? options : undefined,

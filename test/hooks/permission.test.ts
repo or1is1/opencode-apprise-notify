@@ -81,7 +81,7 @@ describe("createPermissionHooks", () => {
 
       expect(sendSpy).toHaveBeenCalledTimes(1);
       const call = sendSpy.mock.calls[0]!;
-      expect(call[1].title).toBe("🔐 OpenCode Permission Required");
+      expect(call[1].title).toBe("OpenCode Permission Required");
       expect(dedup.isDuplicate).toHaveBeenCalled();
       const payload = (dedup.isDuplicate as ReturnType<typeof mock>).mock.calls[0]![0] as NotificationPayload;
       expect(payload.type).toBe("permission");
@@ -151,7 +151,7 @@ describe("createPermissionHooks", () => {
 
       expect(sendSpy).toHaveBeenCalledTimes(1);
       const call = sendSpy.mock.calls[0]!;
-      expect(call[1].title).toBe("🔐 OpenCode Permission Required");
+      expect(call[1].title).toBe("OpenCode Permission Required");
       const payload = (dedup.isDuplicate as ReturnType<typeof mock>).mock.calls[0]![0] as NotificationPayload;
       expect(payload.context.toolName).toBe("bash");
       expect(payload.context.action).toBe("rm -rf /tmp/*");

@@ -107,7 +107,7 @@ export function createIdleHook(
           // Session might not have todos — ignore
         }
 
-        const payload = createPayload("idle", "📢 OpenCode Attention Required", {
+        const payload = createPayload("idle", "OpenCode Attention Required", {
           sessionTitle,
           userRequest,
           agentResponse,

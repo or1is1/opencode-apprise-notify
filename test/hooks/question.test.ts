@@ -117,7 +117,7 @@ describe("createQuestionHook", () => {
     expect(sendSpy).toHaveBeenCalledTimes(1);
 
     const call = sendSpy.mock.calls[0]!;
-    expect(call[1].title).toBe("❓ OpenCode Question");
+    expect(call[1].title).toBe("OpenCode Question");
     expect(call[1].body).toContain("Continue?");
   });
 
@@ -143,7 +143,7 @@ describe("createQuestionHook", () => {
 
     expect(capturedPayload).toBeDefined();
     expect(capturedPayload!.type).toBe("question");
-    expect(capturedPayload!.title).toBe("❓ OpenCode Question");
+    expect(capturedPayload!.title).toBe("OpenCode Question");
     expect(capturedPayload!.context.question).toBe("Deploy to prod?");
     expect(capturedPayload!.context.options).toEqual(["yes", "no", "cancel"]);
 

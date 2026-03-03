@@ -145,7 +145,7 @@ describe("Integration + Edge Cases", () => {
 
     const payload: NotificationPayload = {
       type: "idle",
-      title: "📢 OpenCode Attention Required",
+      title: "OpenCode Attention Required",
       context: {
         userRequest: "deploy the app",
         agentResponse: "completed",
