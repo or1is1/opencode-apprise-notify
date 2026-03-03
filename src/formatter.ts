@@ -66,5 +66,9 @@ export function formatNotification(
       body = "";
   }
 
+  if (body) {
+    body = `────────────────────\n\n${body}`;
+  }
+
   return { title, body, notificationType };
 }

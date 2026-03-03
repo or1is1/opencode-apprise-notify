@@ -123,10 +123,10 @@ describe("Formatter Module", () => {
 
     expect(formatted.body).toContain("────────────────────");
     const segments = formatted.body.split("────────────────────");
-    expect(segments.length).toBe(3);
+    expect(segments.length).toBe(4);
   });
 
-  it("formatNotification() has no divider when only one field is present", () => {
+  it("formatNotification() has leading divider but no field dividers when only one field", () => {
     const payload = createPayload("idle", {
       ...emptyContext,
       userRequest: "Solo field",
@@ -134,8 +134,9 @@ describe("Formatter Module", () => {
 
     const formatted = formatNotification(payload);
 
-    expect(formatted.body).toBe("📝 REQUEST: Solo field");
-    expect(formatted.body).not.toContain("────────────────────");
+    expect(formatted.body).toContain("📝 REQUEST: Solo field");
+    const segments = formatted.body.split("────────────────────");
+    expect(segments.length).toBe(2);
   });
 
   it("formatNotification() handles empty context without crashing", () => {
