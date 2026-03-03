@@ -71,7 +71,7 @@ describe("Integration + Edge Cases", () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 
-  it("preserves Unicode Korean text and truncates multi-byte content safely", () => {
+  it("preserves Unicode Korean text in formatted output", () => {
     const korean = "안녕하세요 OpenCode 에이전트입니다";
     const payload: NotificationPayload = {
       type: "idle",
@@ -87,20 +87,8 @@ describe("Integration + Edge Cases", () => {
       },
     };
 
-    const formatted = formatNotification(payload, 200);
+    const formatted = formatNotification(payload);
     expect(formatted.body).toContain(korean);
-
-    const longKoreanPayload: NotificationPayload = {
-      ...payload,
-      context: {
-        ...payload.context,
-        userRequest: korean.repeat(300),
-      },
-    };
-    const truncated = formatNotification(longKoreanPayload, 150);
-
-    expect(truncated.body.length).toBeLessThanOrEqual(150);
-    expect(truncated.body).toContain("...(truncated)");
   });
 
   it("treats shell-looking input as plain text in formatter output", () => {
@@ -121,27 +109,6 @@ describe("Integration + Edge Cases", () => {
 
     const formatted = formatNotification(payload);
     expect(formatted.body).toContain(malicious);
-  });
-
-  it("truncates very long messages to configured length", () => {
-    const veryLong = "x".repeat(3000);
-    const payload: NotificationPayload = {
-      type: "idle",
-      title: "long",
-      context: {
-        userRequest: veryLong,
-        agentResponse: undefined,
-        question: undefined,
-        options: undefined,
-        todoStatus: undefined,
-        toolName: undefined,
-        action: undefined,
-      },
-    };
-
-    const formatted = formatNotification(payload, 1500);
-    expect(formatted.body.length).toBeLessThanOrEqual(1500);
-    expect(formatted.body).toContain("...(truncated)");
   });
 
   it("handles empty context fields without crashing", () => {

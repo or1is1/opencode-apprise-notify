@@ -1,5 +1,5 @@
 import type { DedupChecker } from "../dedup.js";
-import { formatNotification, DEFAULT_TRUNCATE_LENGTH } from "../formatter.js";
+import { formatNotification } from "../formatter.js";
 import { sendNotification } from "../notifier.js";
 import type { HookEventType, NotificationContext, NotificationPayload, PluginConfig } from "../types.js";
 
@@ -34,7 +34,7 @@ export async function sendHookNotification(
   if (dedup.isDuplicate(payload)) return;
 
   try {
-    const formatted = formatNotification(payload, DEFAULT_TRUNCATE_LENGTH);
+    const formatted = formatNotification(payload);
     await sendNotification(config, formatted);
   } catch (err: unknown) {
     console.warn(`[opencode-plugin-apprise] ${hookName} hook error:`, err);

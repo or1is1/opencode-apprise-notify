@@ -11,32 +11,6 @@ const TYPE_MAP: Record<HookEventType, AppriseNotificationType> = {
   permission: "warning",
 };
 
-export const DEFAULT_TRUNCATE_LENGTH = 1500;
-const TRUNCATE_LINE_THRESHOLD = 10;
-const TRUNCATE_HEAD_LINES = 5;
-const TRUNCATE_TAIL_LINES = 5;
-const TRUNCATE_MARKER = "\n...(truncated)";
-
-export function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-
-  const lines = text.split("\n");
-  if (lines.length <= TRUNCATE_LINE_THRESHOLD) {
-    const keepLength = maxLength - TRUNCATE_MARKER.length;
-    return text.slice(0, keepLength) + TRUNCATE_MARKER;
-  }
-
-  const head = lines.slice(0, TRUNCATE_HEAD_LINES).join("\n");
-  const tail = lines.slice(-TRUNCATE_TAIL_LINES).join("\n");
-  const result = head + TRUNCATE_MARKER + "\n" + tail;
-
-  if (result.length > maxLength) {
-    return text.slice(0, maxLength - TRUNCATE_MARKER.length) + TRUNCATE_MARKER;
-  }
-
-  return result;
-}
-
 export function formatTodoStatus(todos: Array<{ status: string; content: string }>): string {
   const done = todos.filter((todo) => todo.status === "completed").length;
   const inProgress = todos.filter((todo) => todo.status === "in_progress").length;
@@ -52,7 +26,6 @@ export function formatTodoStatus(todos: Array<{ status: string; content: string 
 
 export function formatNotification(
   payload: NotificationPayload,
-  truncateLength: number = DEFAULT_TRUNCATE_LENGTH,
 ): FormattedNotification {
   const { type, title, context } = payload;
   const notificationType = TYPE_MAP[type] ?? "info";
@@ -88,8 +61,6 @@ export function formatNotification(
     default:
       body = "";
   }
-
-  body = truncateText(body, truncateLength);
 
   return { title, body, notificationType };
 }

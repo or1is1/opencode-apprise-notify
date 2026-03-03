@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { formatNotification, formatTodoStatus, truncateText } from "../src/formatter.js";
+import { formatNotification, formatTodoStatus } from "../src/formatter.js";
 import type { NotificationContext, NotificationPayload } from "../src/types.js";
 
 const emptyContext: NotificationContext = {
@@ -64,19 +64,6 @@ describe("Formatter Module", () => {
     expect(formatted.notificationType).toBe("warning");
     expect(formatted.body).toContain("Tool: Bash");
     expect(formatted.body).toContain("Action: Run build");
-  });
-
-  it("truncateText() truncates long input and includes marker", () => {
-    const longText = "x".repeat(3000);
-    const truncated = truncateText(longText, 1500);
-
-    expect(truncated.length).toBeLessThanOrEqual(1500);
-    expect(truncated).toContain("...(truncated)");
-  });
-
-  it("truncateText() returns short input unchanged", () => {
-    const text = "short text";
-    expect(truncateText(text, 1500)).toBe(text);
   });
 
   it("formatTodoStatus() summarizes mixed todo statuses", () => {
