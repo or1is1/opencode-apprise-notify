@@ -4,17 +4,29 @@ import { formatTodoStatus } from "../formatter.js";
 import type { PluginConfig } from "../types.js";
 import { createPayload, sendHookNotification } from "./shared.js";
 
-interface SessionMessageWrapper {
-  info: { role: string };
-  parts: Array<{ type: string; text?: string }>;
+interface MessagePart {
+  type: string;
+  text?: string;
+  synthetic?: boolean;
 }
 
-function extractText(parts: Array<{ type: string; text?: string }>): string | undefined {
-  const texts = parts
-    .filter((p) => p.type === "text" && p.text)
-    .map((p) => p.text as string);
+interface SessionMessageWrapper {
+  info: { role: string };
+  parts: MessagePart[];
+}
+
+function extractText(parts: MessagePart[]): string | undefined {
+  const textParts = parts.filter((p) => p.type === "text" && p.text);
+  const nonSynthetic = textParts.filter((p) => !p.synthetic);
+  const source = nonSynthetic.length > 0 ? nonSynthetic : textParts;
+  const texts = source.map((p) => p.text as string);
 
   return texts.join("\n").trim() || undefined;
+}
+
+function isFullySyntheticMessage(parts: MessagePart[]): boolean {
+  const textParts = parts.filter((p) => p.type === "text");
+  return textParts.length > 0 && textParts.every((p) => p.synthetic === true);
 }
 
 export function createIdleHook(
@@ -66,6 +78,7 @@ export function createIdleHook(
         for (let i = messages.length - 1; i >= 0; i--) {
           const msg = messages[i];
           if (msg?.info?.role === "user") {
+            if (isFullySyntheticMessage(msg.parts)) continue;
             userRequest = extractText(msg.parts);
             break;
           }

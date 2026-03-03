@@ -290,6 +290,122 @@ describe("createIdleHook", () => {
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
+  it("skips fully-synthetic user messages and finds real user request", async () => {
+    let dedupPayload: NotificationPayload | undefined;
+    const dedup: DedupChecker = {
+      isDuplicate: mock((payload: NotificationPayload) => {
+        dedupPayload = payload;
+        return false;
+      }),
+      clear: mock(() => {}),
+    };
+
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-syn", parentID: undefined } })),
+        messages: mock(() =>
+          Promise.resolve({ data: [
+            {
+              info: { role: "user" },
+              parts: [{ type: "text", text: "Real user question" }],
+            },
+            {
+              info: { role: "assistant" },
+              parts: [{ type: "text", text: "Here is the answer" }],
+            },
+            {
+              info: { role: "user" },
+              parts: [{ type: "text", text: "[SYSTEM] auto-continuation", synthetic: true }],
+            },
+            {
+              info: { role: "assistant" },
+              parts: [{ type: "text", text: "Continued working..." }],
+            },
+          ] })
+        ),
+        todo: mock(() => Promise.resolve({ data: [] })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), dedup, 0);
+
+    await hook(makeIdleEvent("s-syn"));
+    await wait(0);
+
+    expect(dedupPayload?.context.userRequest).toBe("Real user question");
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("extracts non-synthetic text from mixed parts", async () => {
+    let dedupPayload: NotificationPayload | undefined;
+    const dedup: DedupChecker = {
+      isDuplicate: mock((payload: NotificationPayload) => {
+        dedupPayload = payload;
+        return false;
+      }),
+      clear: mock(() => {}),
+    };
+
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-mix", parentID: undefined } })),
+        messages: mock(() =>
+          Promise.resolve({ data: [
+            {
+              info: { role: "user" },
+              parts: [
+                { type: "text", text: "Injected system context", synthetic: true },
+                { type: "text", text: "What the user actually typed" },
+              ],
+            },
+            {
+              info: { role: "assistant" },
+              parts: [{ type: "text", text: "Response" }],
+            },
+          ] })
+        ),
+        todo: mock(() => Promise.resolve({ data: [] })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), dedup, 0);
+
+    await hook(makeIdleEvent("s-mix"));
+    await wait(0);
+
+    expect(dedupPayload?.context.userRequest).toBe("What the user actually typed");
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("still sends notification when all messages are synthetic (no real user message found)", async () => {
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-allsyn", parentID: undefined } })),
+        messages: mock(() =>
+          Promise.resolve({ data: [
+            {
+              info: { role: "user" },
+              parts: [{ type: "text", text: "Auto message 1", synthetic: true }],
+            },
+            {
+              info: { role: "assistant" },
+              parts: [{ type: "text", text: "Auto response" }],
+            },
+          ] })
+        ),
+        todo: mock(() => Promise.resolve({ data: [] })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(), 0);
+
+    await hook(makeIdleEvent("s-allsyn"));
+    await wait(0);
+
+    // No real user request found, so userRequest is undefined, but notification still sends
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("handles client errors without throwing", async () => {
     const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
     const client: MockClient = {
