@@ -7,6 +7,7 @@ export type HookEventType = "idle" | "question" | "permission";
 export type AppriseNotificationType = "info" | "warning" | "success" | "failure";
 
 export interface NotificationContext {
+  sessionTitle: string | undefined;
   userRequest: string | undefined;
   agentResponse: string | undefined;
   question: string | undefined;

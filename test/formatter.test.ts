@@ -3,6 +3,7 @@ import { formatNotification, formatTodoStatus } from "../src/formatter.js";
 import type { NotificationContext, NotificationPayload } from "../src/types.js";
 
 const emptyContext: NotificationContext = {
+  sessionTitle: undefined,
   userRequest: undefined,
   agentResponse: undefined,
   question: undefined,
@@ -32,9 +33,9 @@ describe("Formatter Module", () => {
     const formatted = formatNotification(payload);
 
     expect(formatted.notificationType).toBe("info");
-    expect(formatted.body).toContain("Request: Ship task 6");
-    expect(formatted.body).toContain("Response: Formatter and tests added");
-    expect(formatted.body).toContain("Todo: ✅ 2 done | ▶️ 1 in_progress");
+    expect(formatted.body).toContain("**Request:** Ship task 6");
+    expect(formatted.body).toContain("**Response:** Formatter and tests added");
+    expect(formatted.body).toContain("**Todo:** ✅ 2 done | ▶️ 1 in_progress");
   });
 
   it("formatNotification() for question includes question and options", () => {
@@ -48,8 +49,8 @@ describe("Formatter Module", () => {
     const formatted = formatNotification(payload);
 
     expect(formatted.notificationType).toBe("warning");
-    expect(formatted.body).toContain("Question: Where should we deploy?");
-    expect(formatted.body).toContain("Options:\n  1. staging\n  2. production");
+    expect(formatted.body).toContain("**Question:** Where should we deploy?");
+    expect(formatted.body).toContain("**Options:**\n  1. staging\n  2. production");
   });
 
   it("formatNotification() for permission includes tool and action", () => {
@@ -62,8 +63,8 @@ describe("Formatter Module", () => {
     const formatted = formatNotification(payload);
 
     expect(formatted.notificationType).toBe("warning");
-    expect(formatted.body).toContain("Tool: Bash");
-    expect(formatted.body).toContain("Action: Run build");
+    expect(formatted.body).toContain("**Tool:** Bash");
+    expect(formatted.body).toContain("**Action:** Run build");
   });
 
   it("formatTodoStatus() summarizes mixed todo statuses", () => {
@@ -76,6 +77,38 @@ describe("Formatter Module", () => {
     ]);
 
     expect(status).toBe("✅ 2 done | ▶️ 1 in_progress | ⚪ 2 pending");
+  });
+
+  it("formatNotification() for idle includes sessionTitle when present", () => {
+    const payload = createPayload("idle", {
+      ...emptyContext,
+      sessionTitle: "Apprise plugin v1.2.4 test",
+      userRequest: "Test notification",
+      todoStatus: "✅ 3 done",
+    });
+
+    const formatted = formatNotification(payload);
+
+    expect(formatted.body).toContain("**Title:** Apprise plugin v1.2.4 test");
+    expect(formatted.body).toContain("**Request:** Test notification");
+    expect(formatted.body).toContain("**Todo:** ✅ 3 done");
+    const titleIndex = formatted.body.indexOf("**Title:**");
+    const requestIndex = formatted.body.indexOf("**Request:**");
+    expect(titleIndex).toBeLessThan(requestIndex);
+  });
+
+  it("formatNotification() for question includes sessionTitle when present", () => {
+    const payload = createPayload("question", {
+      ...emptyContext,
+      sessionTitle: "Deploy pipeline setup",
+      question: "Which environment?",
+      options: ["dev", "prod"],
+    });
+
+    const formatted = formatNotification(payload);
+
+    expect(formatted.body).toContain("**Title:** Deploy pipeline setup");
+    expect(formatted.body).toContain("**Question:** Which environment?");
   });
 
   it("formatNotification() handles empty context without crashing", () => {

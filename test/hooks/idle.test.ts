@@ -228,7 +228,7 @@ describe("createIdleHook", () => {
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it("sends idle notification with rich context", async () => {
+  it("sends idle notification with rich context including session title", async () => {
     let dedupPayload: NotificationPayload | undefined;
     const dedup: DedupChecker = {
       isDuplicate: mock((payload: NotificationPayload) => {
@@ -240,7 +240,7 @@ describe("createIdleHook", () => {
 
     const client: MockClient = {
       session: {
-        get: mock(() => Promise.resolve({ data: { id: "s-2", parentID: undefined } })),
+        get: mock(() => Promise.resolve({ data: { id: "s-2", parentID: undefined, title: "Ship feature X" } })),
         messages: mock(() =>
           Promise.resolve({ data: [
             {
@@ -267,6 +267,7 @@ describe("createIdleHook", () => {
     await wait(0);
 
     expect(dedupPayload?.type).toBe("idle");
+    expect(dedupPayload?.context.sessionTitle).toBe("Ship feature X");
     expect(dedupPayload?.context.userRequest).toBe("Need an update");
     expect(dedupPayload?.context.agentResponse).toBe("Working on it");
     expect(dedupPayload?.context.todoStatus).toContain("in_progress");

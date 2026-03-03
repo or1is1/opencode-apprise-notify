@@ -67,8 +67,10 @@ export function createIdleHook(
 
       try {
         const sessionResponse = await ctx.client.session.get({ path: { id: sessionID } });
-        const sessionInfo = sessionResponse.data as unknown as { parentID?: string };
+        const sessionInfo = sessionResponse.data as unknown as { parentID?: string; title?: string };
         if (sessionInfo.parentID) return;
+
+        const sessionTitle = sessionInfo.title || undefined;
 
         const messagesResponse = await ctx.client.session.messages({
           path: { id: sessionID },
@@ -106,6 +108,7 @@ export function createIdleHook(
         }
 
         const payload = createPayload("idle", "📢 OpenCode Attention Required", {
+          sessionTitle,
           userRequest,
           agentResponse,
           todoStatus,

@@ -4,6 +4,7 @@ import { sendNotification } from "../notifier.js";
 import type { HookEventType, NotificationContext, NotificationPayload, PluginConfig } from "../types.js";
 
 const EMPTY_CONTEXT: NotificationContext = {
+  sessionTitle: undefined,
   userRequest: undefined,
   agentResponse: undefined,
   question: undefined,
