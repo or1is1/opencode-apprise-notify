@@ -8,6 +8,8 @@ export type MockClient = {
     get: ReturnType<typeof mock>;
     messages: ReturnType<typeof mock>;
     todo: ReturnType<typeof mock>;
+    children: ReturnType<typeof mock>;
+    status: ReturnType<typeof mock>;
   };
 };
 

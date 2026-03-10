@@ -40,6 +40,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-1", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -59,6 +61,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-1", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -82,6 +86,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-1", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -105,6 +111,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "background-session-1", parentID: "parent-1" } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -124,6 +132,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-delay", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -142,6 +152,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-cancel", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -166,6 +178,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-dup", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -185,6 +199,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-retry", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -233,6 +249,8 @@ describe("createIdleHook", () => {
             { content: "Ship feature", status: "in_progress" },
           ] })
         ),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -255,6 +273,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-4", parentID: undefined } })),
         messages: mock(() => Promise.resolve({ data: [] })),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -300,6 +320,8 @@ describe("createIdleHook", () => {
           ] })
         ),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -341,6 +363,8 @@ describe("createIdleHook", () => {
           ] })
         ),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -370,6 +394,8 @@ describe("createIdleHook", () => {
           ] })
         ),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -389,6 +415,8 @@ describe("createIdleHook", () => {
         get: mock(() => Promise.resolve({ data: { id: "s-5", parentID: undefined } })),
         messages: mock(() => Promise.reject(new Error("boom"))),
         todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
       },
     };
 
@@ -400,5 +428,114 @@ describe("createIdleHook", () => {
     expect(sendSpy).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it("does not crash or notify when session data is undefined", async () => {
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: undefined })),
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [] })),
+        status: mock(() => Promise.resolve({ data: {} })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(), 0);
+
+    await hook(makeIdleEvent("s-null"));
+    await wait(0);
+
+    expect(client.session.get).toHaveBeenCalledWith({ path: { id: "s-null" } });
+    expect(client.session.messages).not.toHaveBeenCalled();
+    expect(client.session.todo).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("suppresses notification when active child has status busy", async () => {
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-parent", parentID: undefined } })),
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [{ id: "child-1" }] })),
+        status: mock(() => Promise.resolve({ data: { "child-1": { type: "busy" } } })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(), 0);
+
+    await hook(makeIdleEvent("s-parent"));
+    await wait(0);
+
+    expect(client.session.children).toHaveBeenCalledWith({ path: { id: "s-parent" } });
+    expect(client.session.status).toHaveBeenCalled();
+    expect(client.session.messages).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows notification when child has status idle", async () => {
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-parent2", parentID: undefined } })),
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [{ id: "child-2" }] })),
+        status: mock(() => Promise.resolve({ data: { "child-2": { type: "idle" } } })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(), 0);
+
+    await hook(makeIdleEvent("s-parent2"));
+    await wait(0);
+
+    expect(client.session.children).toHaveBeenCalledWith({ path: { id: "s-parent2" } });
+    expect(client.session.status).toHaveBeenCalled();
+    expect(client.session.messages).toHaveBeenCalledWith({ path: { id: "s-parent2" } });
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows notification when session.children() fails", async () => {
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-parent3", parentID: undefined } })),
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.reject(new Error("children fetch failed"))),
+        status: mock(() => Promise.resolve({ data: {} })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(), 0);
+
+    await hook(makeIdleEvent("s-parent3"));
+    await wait(0);
+
+    expect(client.session.children).toHaveBeenCalledWith({ path: { id: "s-parent3" } });
+    expect(client.session.messages).toHaveBeenCalledWith({ path: { id: "s-parent3" } });
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses notification when multiple children include one active", async () => {
+    const client: MockClient = {
+      session: {
+        get: mock(() => Promise.resolve({ data: { id: "s-parent4", parentID: undefined } })),
+        messages: mock(() => Promise.resolve({ data: [] })),
+        todo: mock(() => Promise.resolve({ data: [] })),
+        children: mock(() => Promise.resolve({ data: [{ id: "child-3" }, { id: "child-4" }] })),
+        status: mock(() => Promise.resolve({ data: { "child-3": { type: "idle" }, "child-4": { type: "busy" } } })),
+      },
+    };
+
+    const hook = createIdleHook(makeInput(client), makeConfig(), makeDedup(), 0);
+
+    await hook(makeIdleEvent("s-parent4"));
+    await wait(0);
+
+    expect(client.session.children).toHaveBeenCalledWith({ path: { id: "s-parent4" } });
+    expect(client.session.status).toHaveBeenCalled();
+    expect(client.session.messages).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
   });
 });

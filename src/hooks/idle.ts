@@ -42,8 +42,29 @@ export function createIdleHook(
 
       try {
         const sessionResponse = await ctx.client.session.get({ path: { id: sessionID } });
-        const sessionInfo = sessionResponse.data as unknown as SessionInfo;
+        const sessionInfo = sessionResponse.data as unknown as SessionInfo | undefined;
+        if (!sessionInfo) return;
         if (sessionInfo.parentID) return;
+
+        // Check if any child session is still active (not idle)
+        try {
+          const [childrenResponse, statusResponse] = await Promise.all([
+            ctx.client.session.children({ path: { id: sessionID } }),
+            ctx.client.session.status(),
+          ]);
+          const children = (childrenResponse.data ?? []) as unknown as Array<{ id: string }>;
+          const statuses = (statusResponse.data ?? {}) as unknown as Record<string, { type: string }>;
+
+          for (const child of children) {
+            const childStatus = statuses[child.id];
+            if (childStatus && childStatus.type !== "idle") {
+              // Child session is still active, suppress notification
+              return;
+            }
+          }
+        } catch {
+          // If child/status lookup fails, continue with notification flow
+        }
 
         const sessionTitle = sessionInfo.title || undefined;
 

@@ -35,6 +35,10 @@ export interface SessionInfo {
   title?: string;
 }
 
+export interface SessionStatusEntry {
+  type: string;
+}
+
 export interface MessagePart {
   type: string;
   text?: string;
